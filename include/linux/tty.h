@@ -11,14 +11,16 @@
 
 #include <termios.h>
 
+//终端缓冲大小
 #define TTY_BUF_SIZE 1024
 
+//终端队列
 struct tty_queue {
 	unsigned long data;
 	unsigned long head;
 	unsigned long tail;
 	struct task_struct * proc_list;
-	char buf[TTY_BUF_SIZE];
+	char buf[TTY_BUF_SIZE]; //缓冲字符大小
 };
 
 #define INC(a) ((a) = ((a)+1) & (TTY_BUF_SIZE-1))

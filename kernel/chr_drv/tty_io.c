@@ -114,7 +114,9 @@ struct tty_queue * table_list[]={
 //初始化终端
 void tty_init(void)
 {
+	//初始化rs-channels
 	rs_init();
+	//初始化控制台
 	con_init();
 }
 

@@ -1,3 +1,17 @@
+/*
+* io汇编实现
+*/
+
+/*
+* 函数格式：
+* void outb(unsigned char value, unsigned short port);
+* @param %0 %eax value 值
+* @param %1 %edx port 端口
+* 汇编形式
+* movl %0, %eax
+* movl %0, %edx
+* outb %al, %dx
+*/
 #define outb(value,port) \
 __asm__ ("outb %%al,%%dx"::"a" (value),"d" (port))
 
