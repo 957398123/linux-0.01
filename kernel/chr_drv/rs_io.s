@@ -6,18 +6,21 @@
 
 /*
  *	rs_io.s
- *
+ * 在收发数据(字节)完成后会触发中断
+ * 该文件实现rs232 串行通信中断处理
  * This module implements the rs232 io interrupts.
  */
 
 .text
 .globl rs1_interrupt,rs2_interrupt
 
+/* 读写队列缓冲区长度 */
 size	= 1024				/* must be power of two !
 					   and must match the value
 					   in tty_io.c!!! */
 
 /* these are the offsets into the read/write buffer structures */
+/* tty_queue结构体位置偏移量 */
 rs_addr = 0
 head = 4
 tail = 8
@@ -27,6 +30,7 @@ buf = 16
 startup	= 256		/* chars left in write queue when we restart it */
 
 /*
+ * table_list,定义在tty_io.c中
  * These are the actual interrupt routines. They look where
  * the interrupt is coming from, and take appropriate action.
  */
@@ -47,34 +51,35 @@ rs_int:
 	pushl $0x10		/* know that bs is ok. Load it */
 	pop %ds
 	pushl $0x10
-	pop %es
-	movl 24(%esp),%edx
-	movl (%edx),%edx
-	movl rs_addr(%edx),%edx
-	addl $2,%edx		/* interrupt ident. reg */
+	pop %es            /* 设置ds, es = 0x10,0x10是段选择子。 */
+	movl 24(%esp),%edx /* 将table_list(tty_queues索引)地址赋值给edx */
+	movl (%edx),%edx   /* 从内存中取值,取出read_q(tty_queue)地址并赋值给edx */
+	movl rs_addr(%edx),%edx /* 将tty_queue结构体中的data(端口值)赋值给edx */
+	addl $2,%edx		/* interrupt ident. reg, edx当前值为中断辨识寄存器端口IIR */
 rep_int:
-	xorl %eax,%eax
-	inb %dx,%al
-	testb $1,%al
-	jne end
-	cmpb $6,%al		/* this shouldn't happen, but ... */
-	ja end
-	movl 24(%esp),%ecx
+	xorl %eax,%eax    /* eax = 0 */
+	inb %dx,%al       /* 通过读取IIR的值可以确定中断是由谁引发的 */
+	testb $1,%al      /* 当Bit0 = 0时,无中断,Bit0 = 1,中断尚未处理,这里是无中断就跳转到end */
+	jne end           /* TEMP ←SRC1 AND SRC2; SF ←MSB(TEMP); IF TEMP = 0 THEN ZF ←1; ELSE ZF ←0; */
+	cmpb $6,%al		/* this shouldn't happen, but ... */ /* 这里不可能是因为IIR的Bit3~Bit7恒为0,所以不会存在大于6的情况。 */
+	ja end          /* 如果IIR的值大于6,跳转到end */
+	movl 24(%esp),%ecx          /* 设置ecx的值为tty_queues指针 */
 	pushl %edx
-	subl $2,%edx
+	subl $2,%edx                /* edx = tty_queue指针 */
 	call jmp_table(,%eax,2)		/* NOTE! not *4, bit0 is 0 already */
-	popl %edx
+	popl %edx                   /* 复位edx的值为端口号 */
 	jmp rep_int
-end:	movb $0x20,%al
-	outb %al,$0x20		/* EOI */
+end:	movb $0x20,%al   /* al = 0x20 */
+	outb %al,$0x20		/* EOI */ /* 在中断处理之后向8259A发送EOI，通知它中断处理结束。 */
 	pop %ds
 	pop %es
 	popl %eax
 	popl %ebx
 	popl %ecx
 	popl %edx
-	addl $4,%esp		# jump over _table_list entry
-	iret
+	/* 这个很重要,不然程序乱套了。 */
+	addl $4,%esp		# jump over _table_list entry, 丢弃缓冲队列(tty_table)指针。就是前面push $table_list+8 or $table_list+ 16
+	iret                /* IERT区别于RET之一就是还会弹出FLAGE的值 */
 
 jmp_table:
 	.long modem_status,write_char,read_char,line_status

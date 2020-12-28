@@ -23,6 +23,7 @@
 extern void rs1_interrupt(void);
 extern void rs2_interrupt(void);
 
+//设置串行端口参数,并测试输出
 static void init(int port)
 {
 	outb_p(0x80,port+3);	/* set DLAB of line control reg */
@@ -36,10 +37,19 @@ static void init(int port)
 
 void rs_init(void)
 {
+	//设置串口中断处理
 	set_intr_gate(0x24,rs1_interrupt);
 	set_intr_gate(0x23,rs2_interrupt);
+	//详细请看UART和串行(COM)接口,UART一般是RS-232C规格的,它提供了RS-232C数据终端设备接口,这样计算机就可以和调制解调器或其它使用RS-232C接口的串行设备通信了。
+	//参考资料：http://www.elecfans.com/emb/jiekou/20171206595886.html
+	//主要是将并行数据转换成串行数据流。
+	//COM接口是指cluster communication port接口，即串行通讯端口。
+	//通常 COM 1 使用的是9 针D 形连接器，也称之为RS-232接口，而COM 2 有的使用的是老式的DB25 针连接器，也称之为RS-422接口，这种接口目前已经很少使用。
+	//初始化端口0x3f8,COM1
 	init(tty_table[1].read_q.data);
+	//初始化端口0x2f8,COM2
 	init(tty_table[2].read_q.data);
+	//
 	outb(inb_p(0x21)&0xE7,0x21);
 }
 

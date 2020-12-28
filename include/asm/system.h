@@ -65,6 +65,7 @@ __asm__ ("movw %%dx,%%ax\n\t" \
 #define set_system_gate(n,addr) \
 	_set_gate(&idt[n],15,3,addr)
 
+//ÉèÖÃÖÐ¶Ï±í
 #define _set_seg_desc(gate_addr,type,dpl,base,limit) {\
 	*(gate_addr) = ((base) & 0xff000000) | \
 		(((base) & 0x00ff0000)>>16) | \

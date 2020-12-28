@@ -101,6 +101,7 @@ struct tty_struct tty_table[] = {
 };
 
 /*
+*  在rs_io.s中,会用到它
  * these are the tables used by the machine code handlers.
  * you can implement pseudo-tty's or something by changing
  * them. Currently not done.
