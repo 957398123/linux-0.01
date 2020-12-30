@@ -59,14 +59,21 @@ rs_int:
 rep_int:
 	xorl %eax,%eax    /* eax = 0 */
 	inb %dx,%al       /* 通过读取IIR的值可以确定中断是由谁引发的 */
-	testb $1,%al      /* 当Bit0 = 0时,无中断,Bit0 = 1,中断尚未处理,这里是无中断就跳转到end */
+	testb $1,%al      /* 当Bit0 = 1时,无中断,Bit0 = 0,中断尚未处理,这里是无中断就跳转到end */
 	jne end           /* TEMP ←SRC1 AND SRC2; SF ←MSB(TEMP); IF TEMP = 0 THEN ZF ←1; ELSE ZF ←0; */
-	cmpb $6,%al		/* this shouldn't happen, but ... */ /* 这里不可能是因为IIR的Bit3~Bit7恒为0,所以不会存在大于6的情况。 */
+	cmpb $6,%al		/* this not should happen, but ... */ /* 这里不可能是因为IIR的Bit3~Bit7恒为0,所以不会存在大于6的情况。 */
 	ja end          /* 如果IIR的值大于6,跳转到end */
 	movl 24(%esp),%ecx          /* 设置ecx的值为tty_queues指针 */
 	pushl %edx
-	subl $2,%edx                /* edx = tty_queue指针 */
-	call jmp_table(,%eax,2)		/* NOTE! not *4, bit0 is 0 already */
+	subl $2,%edx                /* edx端口值=tty_table[].read_q.data */
+	/* 
+	*  能进到这里,al只有以下几个值
+	*  0x0000 = 0d(中断来自于调制解调器状态)
+	*  0x0010 = 2d(传送器保存寄存器空着)
+	*  0x0100 = 4d(接受信息为有效)
+	*  0x0110 = 6d(连接控制状态)
+	*/
+	call jmp_table(,%eax,2)		/* NOTE! not *4, bit0 is 0 already, address = cs : [eax * 2 + jmp_table], 注意一下哈，这个代码是从0x0000开始的，是线性的。 */
 	popl %edx                   /* 复位edx的值为端口号 */
 	jmp rep_int
 end:	movb $0x20,%al   /* al = 0x20 */
@@ -81,21 +88,28 @@ end:	movb $0x20,%al   /* al = 0x20 */
 	addl $4,%esp		# jump over _table_list entry, 丢弃缓冲队列(tty_table)指针。就是前面push $table_list+8 or $table_list+ 16
 	iret                /* IERT区别于RET之一就是还会弹出FLAGE的值 */
 
+/*注意执行这段代码时寄存器的值*/
+/*
+*%ecx table_list(tty_queues索引)地址
+*%edx 端口值,0X2F8或者0x3F8
+*/
 jmp_table:
-	.long modem_status,write_char,read_char,line_status
-
+	.long modem_status,write_char,read_char,line_status /* .long expressions: 定义一个长整型, 并为之分配空间. */
 .align 2
+/* 处理来自于调制解调器状态的中断 */
 modem_status:
-	addl $6,%edx		/* clear intr by reading modem status reg */
-	inb %dx,%al
+	addl $6,%edx		/* clear intr by reading modem status reg, edx=0x2FE或者0x3FE */
+	inb %dx,%al         /* 通过读线路状态寄存器进行复位 */
 	ret
 
+/* 处理来自连接控制状态的中断 */
 .align 2
 line_status:
 	addl $5,%edx		/* clear intr by reading line status reg. */
 	inb %dx,%al
 	ret
 
+/* 处理来自于接受信息为有效的中断 */
 .align 2
 read_char:
 	inb %dx,%al
@@ -115,6 +129,7 @@ read_char:
 	addl $4,%esp
 	ret
 
+/* 处理来自于传送器保存寄存器空着的中断 */
 .align 2
 write_char:
 	movl 4(%ecx),%ecx		# write-queue
